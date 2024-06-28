@@ -1,6 +1,7 @@
 import os
 import re
 import glob
+from unidecode import unidecode
 from collections import Counter
 
 # Função para ler o conteúdo de um arquivo Java
@@ -10,6 +11,11 @@ def ler_conteudo_arquivo(nome_arquivo):
             return arquivo.read()
     return ""
 
+# Função para remover acentos de uma string
+def remover_acentos(texto):
+    return unidecode(texto)
+
+#ler em linhas o arquivo
 def ler_conteudo_arquivo_linhas(nome_arquivo):
     if os.path.exists(nome_arquivo):
         with open(nome_arquivo, 'r', encoding='utf-8') as arquivo:
@@ -64,6 +70,30 @@ def encontrar_frase_por_metodo(matriz, metodo):
             return passo
     return ""
 
+# Função para adicionar os imports necessários
+def adicionar_imports(conteudo, tipo, nome_package):
+    imports_comuns = ""
+    imports_especificos = ""
+    if tipo == "stepdefinitions":
+        imports_comuns = """import io.cucumber.java.en.When;
+import io.cucumber.java.en.And;
+import io.cucumber.java.en.Given;
+import io.cucumber.java.en.Then;
+import net.serenitybdd.annotations.Steps;"""
+        imports_especificos = f"import {nome_package}.{conteudo.split(' ', 3)[2]};"
+
+    elif tipo == "steps":
+        imports_comuns = "import net.serenitybdd.annotations.Step;"
+        imports_especificos = f"import {nome_package}.{conteudo.split(' ', 3)[2]};"
+
+    elif tipo == "page":
+        imports_comuns = """import org.openqa.selenium.By;
+import org.openqa.selenium.WebDriver;"""
+        imports_especificos = f"import {nome_package}.PageBase;"
+
+    conteudo_imports = f"{imports_comuns}\n{imports_especificos}\n\n"
+    return conteudo_imports + conteudo
+
 # Função principal para processar a feature e atualizar os arquivos Java
 def processar_feature(caminho_feature, nome_feature):
     caminho_steps_definitions = gerar_nome_arquivo_step_definitions(nome_feature)
@@ -101,13 +131,21 @@ def processar_feature(caminho_feature, nome_feature):
         # Criar os arquivos Java se não existirem
         if not os.path.exists(caminho_steps_definitions):
             with open(caminho_steps_definitions, 'w', encoding='utf-8') as f:
-                f.write(f"public class {os.path.basename(caminho_steps_definitions).replace('.java', '')} {{\n\n    @Steps\n    {os.path.basename(caminho_steps).replace('.java', '')} {os.path.basename(caminho_steps).replace('.java', '').lower()};\n\n}}\n")
+                conteudo = f"public class {os.path.basename(caminho_steps_definitions).replace('.java', '')} {{\n\n    @Steps\n    {os.path.basename(caminho_steps).replace('.java', '')} {os.path.basename(caminho_steps).replace('.java', '').lower()};\n\n}}\n"
+                conteudo = adicionar_imports(conteudo, "stepdefinitions", "informe_caminho_seu_projeto")
+                f.write(conteudo)
+
         if not os.path.exists(caminho_steps):
             with open(caminho_steps, 'w', encoding='utf-8') as f:
-                f.write(f"public class {os.path.basename(caminho_steps).replace('.java', '')} {{\n\n    {os.path.basename(caminho_pages).replace('.java', '')} {os.path.basename(caminho_pages).replace('.java', '').lower()};\n\n}}\n")
+                conteudo = f"public class {os.path.basename(caminho_steps).replace('.java', '')} {{\n\n    {os.path.basename(caminho_pages).replace('.java', '')} {os.path.basename(caminho_pages).replace('.java', '').lower()};\n\n}}\n"
+                conteudo = adicionar_imports(conteudo, "steps", "informe_caminho_seu_projeto")
+                f.write(conteudo)
+
         if not os.path.exists(caminho_pages):
             with open(caminho_pages, 'w', encoding='utf-8') as f:
-                f.write(f"public class {os.path.basename(caminho_pages).replace('.java', '')} {{\n\n}}\n\n")
+                conteudo = f"public class {os.path.basename(caminho_pages).replace('.java', '')} extends PageBase {{\n\n}}\n\n"
+                conteudo = adicionar_imports(conteudo, "page", "informe_caminho_seu_projeto")
+                f.write(conteudo)
 
         #Cria array novos métodos aos arquivos Java, se não existirem
         novos_metodos_definitions = []
@@ -140,9 +178,12 @@ def processar_feature(caminho_feature, nome_feature):
         metodos_gerados = []
         for passo in passos:
             metodos_gerados.append(gerar_nome_metodo(passo))
-
+        
+        #unificar metodos gerados
+        unificar = list(dict.fromkeys(metodos_gerados))
+        
         #counter para unificar metodos steps definitions
-        contagem = Counter(metodos_gerados + metodos_steps_definitions_existentes)
+        contagem = Counter(metodos_steps_definitions_existentes + unificar)
         passos_metodos_unicos = [item for item, count in contagem.items() if count == 1]
             
         #Extrair metodos steps já existentes
@@ -202,40 +243,41 @@ def processar_feature(caminho_feature, nome_feature):
                 descricao_formatada = substituir_aspas_por_string(descricao)
                 novos_metodos_definitions.append(f"""
     @{passo_completo.split(' ')[0]}("{descricao_formatada}")
-    public void {passo_metodo_unico}(String texto) {{
+    public void {remover_acentos(passo_metodo_unico)}(String texto) {{
         // Implementar a lógica para {passo_completo}
-        {os.path.basename(caminho_steps).replace('.java', '').lower()}.{passo_metodo_unico}(texto);
+        {os.path.basename(caminho_steps).replace('.java', '').lower()}.{remover_acentos(passo_metodo_unico)}(texto);
     }}
 """)
                 novos_metodos_steps.append(f"""
     @Step("{descricao_formatada}")
-    public void {passo_metodo_unico}(String texto) {{
+    public void {remover_acentos(passo_metodo_unico)}(String texto) {{
         // Implementar a lógica para {passo_completo}
-        {os.path.basename(caminho_pages).replace('.java', '').lower()}.{passo_metodo_unico}(texto);
+        {os.path.basename(caminho_pages).replace('.java', '').lower()}.{remover_acentos(passo_metodo_unico)}(texto);
     }}
 """)
                 novos_metodos_pages.append(f"""
-    public void {passo_metodo_unico}(String texto) {{
+    public void {remover_acentos(passo_metodo_unico)}(String texto) {{
         // Implementar a lógica para a página relacionada ao passo {passo_completo}
     }}
 """)
             else:
+                descricao = passo_completo.split(' ', 1)[1]
                 novos_metodos_definitions.append(f"""
     @{passo_completo.split(' ')[0]}("{passo_completo.split(' ', 1)[1]}")
-    public void {passo_metodo_unico}() {{
+    public void {remover_acentos(passo_metodo_unico)}() {{
         // Implementar a lógica para {passo_completo}
-        {os.path.basename(caminho_steps).replace('.java', '').lower()}.{passo_metodo_unico}();
+        {os.path.basename(caminho_steps).replace('.java', '').lower()}.{remover_acentos(passo_metodo_unico)}();
     }}
 """)
                 novos_metodos_steps.append(f"""
     @Step("{descricao}")
-    public void {passo_metodo_unico}() {{
+    public void {remover_acentos(passo_metodo_unico)}() {{
         // Implementar a lógica para {passo_completo}
-        {os.path.basename(caminho_pages).replace('.java', '').lower()}.{passo_metodo_unico}();
+        {os.path.basename(caminho_pages).replace('.java', '').lower()}.{remover_acentos(passo_metodo_unico)}();
     }}
 """)
                 novos_metodos_pages.append(f"""
-    public void {passo_metodo_unico}() {{
+    public void {remover_acentos(passo_metodo_unico)}() {{
         // Implementar a lógica para a página relacionada ao passo {passo_completo}
     }}
 """)
@@ -250,10 +292,11 @@ def processar_feature(caminho_feature, nome_feature):
                 conteudo_steps = conteudo_steps[:index_ultima_chave] + conteudo_steps[index_ultima_chave+1:]
                 conteudo_steps = conteudo_steps + "\n".join(novos_metodos_steps) + "\n}\n"
         if novos_metodos_pages:
-            index_ultima_chave = conteudo_steps_definitions.rfind('}')
+            index_ultima_chave = conteudo_pages.rfind('}')
             if index_ultima_chave != -1:
                 conteudo_pages = conteudo_pages[:index_ultima_chave] + conteudo_pages[index_ultima_chave+1:]
                 conteudo_pages = conteudo_pages + "\n".join(novos_metodos_pages) + "\n}\n"
+
         
         # Escrever o conteúdo atualizado nos arquivos Java
         escrever_conteudo_arquivo(caminho_steps_definitions, conteudo_steps_definitions)
