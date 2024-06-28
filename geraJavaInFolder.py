@@ -57,6 +57,12 @@ def gerar_nome_arquivo_page(nome_base):
     nome_base_formatado = remover_texto_dentro_string(nome_base.title()).replace(" ", "").replace(",", "").replace("!", "").replace("?", "").replace("ç", "c").replace("ã", "a").replace("é", "e").replace("í", "i")
     return os.path.abspath("pages") +"\\"+ nome_base_formatado + "Page.java"
 
+# Função para encontrar a frase correspondente ao método
+def encontrar_frase_por_metodo(matriz, metodo):
+    for passo, metodo_gerado in matriz:
+        if metodo_gerado == metodo:
+            return passo
+    return ""
 
 # Função principal para processar a feature e atualizar os arquivos Java
 def processar_feature(caminho_feature, nome_feature):
@@ -91,27 +97,32 @@ def processar_feature(caminho_feature, nome_feature):
                 in_automatizar = False
                 in_scenario = False
                 in_background = False
+                
         # Criar os arquivos Java se não existirem
         if not os.path.exists(caminho_steps_definitions):
             with open(caminho_steps_definitions, 'w', encoding='utf-8') as f:
                 f.write(f"public class {os.path.basename(caminho_steps_definitions).replace('.java', '')} {{\n\n    @Steps\n    {os.path.basename(caminho_steps).replace('.java', '')} {os.path.basename(caminho_steps).replace('.java', '').lower()};\n\n}}\n")
-        
         if not os.path.exists(caminho_steps):
             with open(caminho_steps, 'w', encoding='utf-8') as f:
                 f.write(f"public class {os.path.basename(caminho_steps).replace('.java', '')} {{\n\n    {os.path.basename(caminho_pages).replace('.java', '')} {os.path.basename(caminho_pages).replace('.java', '').lower()};\n\n}}\n")
-        
         if not os.path.exists(caminho_pages):
             with open(caminho_pages, 'w', encoding='utf-8') as f:
                 f.write(f"public class {os.path.basename(caminho_pages).replace('.java', '')} {{\n\n}}\n\n")
 
+        #Cria array novos métodos aos arquivos Java, se não existirem
+        novos_metodos_definitions = []
+        novos_metodos_steps = []
+        novos_metodos_pages = []
+
         # Ler o conteúdo dos arquivos Java existentes
         conteudo_steps_definitions = ler_conteudo_arquivo(caminho_steps_definitions)
         conteudo_steps_definitions_linhas = ler_conteudo_arquivo_linhas(caminho_steps_definitions)
-        
         conteudo_steps = ler_conteudo_arquivo(caminho_steps)
+        conteudo_steps_linhas = ler_conteudo_arquivo_linhas(caminho_steps)
         conteudo_pages = ler_conteudo_arquivo(caminho_pages)
+        conteudo_pages_linhas = ler_conteudo_arquivo_linhas(caminho_pages)
         
-        #extrair metodos já existentes
+        #Extrair metodos steps definitions já existentes
         metodos_steps_definitions_existentes = []
         in_metodo = False
         for linha in conteudo_steps_definitions_linhas:
@@ -124,32 +135,64 @@ def processar_feature(caminho_feature, nome_feature):
                     metodos_steps_definitions_existentes.append(metodo_final.group(1))
             elif linha == "":
                 in_metodo = False
-        
-        # Adicionar novos métodos aos arquivos Java, se não existirem
-        novos_metodos_definitions = []
-        novos_metodos_steps = []
-        novos_metodos_pages = []
+                
+        #a partir do passo, gera metodo steps definitions e guarda
         metodos_gerados = []
-        reserva = ""
-        #encontra metodo já escrito
         for passo in passos:
             metodos_gerados.append(gerar_nome_metodo(passo))
-        
-            
-        matriz_assoc = list(zip(passos, metodos_gerados))
-        # Função para encontrar a frase correspondente ao método
-        def encontrar_frase_por_metodo(matriz, metodo):
-            for passo, metodo_gerado in matriz:
-                if metodo_gerado == metodo:
-                    return passo
-            return ""
-        
+
+        #counter para unificar metodos steps definitions
         contagem = Counter(metodos_gerados + metodos_steps_definitions_existentes)
         passos_metodos_unicos = [item for item, count in contagem.items() if count == 1]
-
-        #passos_metodos = metodos_gerados + metodos_steps_definitions_existentes
-        #passos_metodos_unicos = set(passos_metodos)
             
+        #Extrair metodos steps já existentes
+        metodos_steps_existentes = []
+        in_metodo_steps = False
+        for linha_steps in conteudo_steps_linhas:
+            linha_steps = linha_steps.strip()
+            if linha_steps.startswith(("public void", "public static", "public String", "public int", "public boolean")):
+                in_metodo_steps = True
+            if in_metodo_steps:
+                metodo_steps_final = re.search(r'\s(\w+)\(', linha_steps)
+                if metodo_steps_final:
+                    metodos_steps_existentes.append(metodo_steps_final.group(1))
+            elif linha_steps == "":
+                in_metodo_steps = False
+                
+        #a partir do passo, gera metodo steps definitions e guarda
+        metodos_steps_gerados = []
+        for passo_steps in passos:
+            metodos_steps_gerados.append(gerar_nome_metodo(passo_steps))
+        #counter para unificar metodos steps definitions
+        contagem_steps = Counter(metodos_steps_gerados + metodos_steps_existentes)
+        passos_metodos_steps_unicos = [item for item, count in contagem_steps.items() if count == 1]
+            
+        #Extrair metodos pages já existentes
+        metodos_pages_existentes = []
+        in_metodo_pages = False
+        for linha_pages in conteudo_pages_linhas:
+            linha_pages = linha_pages.strip()
+            if linha_pages.startswith(("public void", "public static", "public String", "public int", "public boolean")):
+                in_metodo_pages = True
+            if in_metodo_pages:
+                metodo_pages_final = re.search(r'\s(\w+)\(', linha_pages)
+                if metodo_pages_final:
+                    metodos_pages_existentes.append(metodo_pages_final.group(1))
+            elif linha_pages == "":
+                in_metodo_pages = False
+                
+        #a partir do passo, gera metodo steps definitions e guarda
+        metodos_pages_gerados = []
+        for passo_pages in passos:
+            metodos_pages_gerados.append(gerar_nome_metodo(passo_pages))
+        #counter para unificar metodos steps definitions
+        contagem_pages = Counter(metodos_pages_gerados + metodos_pages_existentes)
+        passos_metodos_pages_unicos = [item for item, count in contagem_pages.items() if count == 1]
+            
+            
+        #matriz que associa o passo ao metodo
+        matriz_assoc = list(zip(passos, metodos_gerados))
+        
         for passo_metodo_unico in passos_metodos_unicos:
             passo_completo = encontrar_frase_por_metodo(matriz_assoc,passo_metodo_unico)
             #exists = False
@@ -164,69 +207,54 @@ def processar_feature(caminho_feature, nome_feature):
         {os.path.basename(caminho_steps).replace('.java', '').lower()}.{passo_metodo_unico}(texto);
     }}
 """)
-                
-                if passo_metodo_unico.startswith(("public void", "public static", "public String", "public int", "public boolean")):
-                    print("criando metodo para "+ passo_metodo_unico)
-                    if nome_metodo in passo_metodo_unico:
-                        print("")
-                        print("já existe, nao criado ")
-                    elif nome_metodo not in passo_metodo_unico:
-                        print("não existe, será criado")
-                        print("")
-                        
-
-        for passo in passos:
-            nome_metodo = gerar_nome_metodo(passo)
-            descricao_formatada = ""
-            if "'" in passo:  # Se o passo contém aspas, ajustar para passar o parâmetro string
-                if not metodo_existe(reserva.rstrip('}\n') + "\n".join(novos_metodos_definitions), nome_metodo):
-                   print("")
-                if not metodo_existe(reserva.rstrip('}\n') + "\n".join(novos_metodos_steps), nome_metodo):
-                    novos_metodos_steps.append(f"""
+                novos_metodos_steps.append(f"""
     @Step("{descricao_formatada}")
-    public void {nome_metodo}(String texto) {{
-        // Implementar a lógica para {passo}
-        {os.path.basename(caminho_pages).replace('.java', '').lower()}.{nome_metodo}(texto);
+    public void {passo_metodo_unico}(String texto) {{
+        // Implementar a lógica para {passo_completo}
+        {os.path.basename(caminho_pages).replace('.java', '').lower()}.{passo_metodo_unico}(texto);
     }}
 """)
-                if not metodo_existe(reserva.rstrip('}\n') + "\n".join(novos_metodos_pages), nome_metodo):
-                    novos_metodos_pages.append(f"""
-    public void {nome_metodo}(String texto) {{
-        // Implementar a lógica para a página relacionada ao passo {passo}
+                novos_metodos_pages.append(f"""
+    public void {passo_metodo_unico}(String texto) {{
+        // Implementar a lógica para a página relacionada ao passo {passo_completo}
     }}
 """)
-    
             else:
-                if not metodo_existe(reserva.rstrip('}\n') + "\n".join(novos_metodos_definitions), nome_metodo):
-                    novos_metodos_definitions.append(f"""
-    @{passo.split(' ')[0]}("{passo.split(' ', 1)[1]}")
-    public void {nome_metodo}() {{
-        // Implementar a lógica para {passo}
-        {os.path.basename(caminho_steps).replace('.java', '').lower()}.{nome_metodo}();
+                novos_metodos_definitions.append(f"""
+    @{passo_completo.split(' ')[0]}("{passo_completo.split(' ', 1)[1]}")
+    public void {passo_metodo_unico}() {{
+        // Implementar a lógica para {passo_completo}
+        {os.path.basename(caminho_steps).replace('.java', '').lower()}.{passo_metodo_unico}();
     }}
 """)
-                if not metodo_existe(reserva.rstrip('}\n') + "\n".join(novos_metodos_steps), nome_metodo):
-                    novos_metodos_steps.append(f"""
-    @Step("{descricao_formatada}")
-    public void {nome_metodo}() {{
-        // Implementar a lógica para {passo}
-        {os.path.basename(caminho_pages).replace('.java', '').lower()}.{nome_metodo}();
+                novos_metodos_steps.append(f"""
+    @Step("{descricao}")
+    public void {passo_metodo_unico}() {{
+        // Implementar a lógica para {passo_completo}
+        {os.path.basename(caminho_pages).replace('.java', '').lower()}.{passo_metodo_unico}();
     }}
 """)
-                if not metodo_existe(reserva.rstrip('}\n') + "\n".join(novos_metodos_pages), nome_metodo):
-                    novos_metodos_pages.append(f"""
-    public void {nome_metodo}() {{
-        // Implementar a lógica para a página relacionada ao passo {passo}
+                novos_metodos_pages.append(f"""
+    public void {passo_metodo_unico}() {{
+        // Implementar a lógica para a página relacionada ao passo {passo_completo}
     }}
 """)
-                
-        # Adicionar novos métodos ao conteúdo existente dentro do bloco da classe
         if novos_metodos_definitions:
-            conteudo_steps_definitions = conteudo_steps_definitions.rstrip('}\n') + "\n".join(novos_metodos_definitions) + "\n}\n"
+            index_ultima_chave = conteudo_steps_definitions.rfind('}')
+            if index_ultima_chave != -1:
+                conteudo_steps_definitions = conteudo_steps_definitions[:index_ultima_chave] + conteudo_steps_definitions[index_ultima_chave+1:]
+                conteudo_steps_definitions = conteudo_steps_definitions + "\n".join(novos_metodos_definitions) + "\n}\n"
         if novos_metodos_steps:
-            conteudo_steps = conteudo_steps.rstrip('}\n') + "\n".join(novos_metodos_steps) + "\n}\n"
+            index_ultima_chave = conteudo_steps.rfind('}')
+            if index_ultima_chave != -1:
+                conteudo_steps = conteudo_steps[:index_ultima_chave] + conteudo_steps[index_ultima_chave+1:]
+                conteudo_steps = conteudo_steps + "\n".join(novos_metodos_steps) + "\n}\n"
         if novos_metodos_pages:
-            conteudo_pages = conteudo_pages.rstrip('}\n') + "\n".join(novos_metodos_pages) + "\n}\n"
+            index_ultima_chave = conteudo_steps_definitions.rfind('}')
+            if index_ultima_chave != -1:
+                conteudo_pages = conteudo_pages[:index_ultima_chave] + conteudo_pages[index_ultima_chave+1:]
+                conteudo_pages = conteudo_pages + "\n".join(novos_metodos_pages) + "\n}\n"
+        
         # Escrever o conteúdo atualizado nos arquivos Java
         escrever_conteudo_arquivo(caminho_steps_definitions, conteudo_steps_definitions)
         escrever_conteudo_arquivo(caminho_steps, conteudo_steps)
@@ -239,7 +267,7 @@ def processar_feature(caminho_feature, nome_feature):
 
 # Exemplo de uso
 if __name__ == "__main__":
-    # Definindo diretórios para os arquivos de saída
+    # Definindo pasta a ser procurada os arquivos java para escrever os arquivos de saída
     dir_steps_definitions = 'stepdefinitions'
     dir_steps = 'steps'
     dir_pages = 'pages'
